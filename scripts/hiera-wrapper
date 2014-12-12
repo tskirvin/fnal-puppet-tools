@@ -1,0 +1,169 @@
+#!/usr/bin/env python
+"""
+hiera-wrapper - query hiera based on role/environment
+"""
+
+#########################################################################
+### Declarations ########################################################
+#########################################################################
+
+import optparse, os, sys
+
+#########################################################################
+### Configuration #######################################################
+#########################################################################
+
+hiera = '/usr/bin/hiera'
+
+config = '/etc/puppet/hiera.yaml'
+environment = 'production'
+role = 'unconfigured'
+puppetclass = 'server'
+
+#########################################################################
+### main () #############################################################
+#########################################################################
+
+def main() :
+    usage = "%prog [options] KEY"
+    p = optparse.OptionParser(usage=usage,
+        description="query hiera by role/environment")
+    p.add_option('--config', dest='config', action='store', 
+        default=config,
+        help='default hiera configuration file (default: %default)')
+    p.add_option('--class', dest='puppetclass', action='store', 
+        default=puppetclass,
+        help='class with which to query (default: %default)')
+    p.add_option('--role', dest='role', action='store', 
+        default=role,
+        help='role with which to query (default: %default)')
+    p.add_option('--environment', dest='environment', action='store', 
+        default=environment,
+        help='environment with which to query (default: %default)')
+    p.add_option('--host', dest='host', action='store',
+        help='hostname to query')
+    p.add_option('--array', dest='array', action='store_true', 
+        help='output as an array? (default: %default)')
+    p.add_option('--hash', dest='hash', action='store_true', 
+        help='output as a hash? (default: %default)')
+    p.add_option('--debug', dest='debug', action='store_true',
+        help='set to print debugging information')
+
+    global opt
+    opt, args = p.parse_args()
+
+    if len(args) < 1:
+        p.print_help()
+        sys.exit(1)
+
+    if opt.array and opt.hash:
+        p.error('cannot use --hash and --array together')
+
+    command_base = [ hiera, '-c', opt.config ]
+
+    if opt.debug: command_base.append('-d')
+    if opt.array: command_base.append('-a')
+    if opt.hash:  command_base.append('-h')
+    
+    command_args = [ 
+         "environment=%s" % opt.environment,
+         "role::base::hier_top=%s" % opt.puppetclass,
+         "role::base::hier_role=%s" % opt.role,
+         "::role=%s" % opt.role 
+		   ]
+
+    if opt.host:
+        command_args.append("clientcert=%s" % opt.host)
+    
+    for i in args:
+        array = command_base
+        array.append(i)
+        for i in command_args: array.append(i)
+        command = ' '.join(array)
+        print "# %s" % command
+        os.system(command)
+
+if __name__ == "__main__":
+    main()
+
+#########################################################################
+### POD Documentation ###################################################
+#########################################################################
+## We use this to generate man pages.
+
+"""
+
+=head1 NAME
+
+hiera-wrapper - helper script to query hiera values
+
+=head1 SYNOPSIS
+
+B<hiera-wrapper> I<rootmail>
+
+B<hiera-wrapper> --environment itb I<rootmail>
+
+B<hiera-wrapper> --role console I<rootmail>
+
+=head1 USAGE
+
+hiera-wrapper wraps the hiera command in a way that makes it easy to query
+hiera based on the standard system role and environment (normally set
+through some puppet intricacies and system facts).  This was necessary
+because a) the documentation for hiera is terrible and b) our 'role' fact
+is a bit complicated.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --array
+
+Output as an array (equivalent to I<-a>).  Please do not use this *and*
+I<--hash>.
+
+=item --config I<CONFIGFILE>
+
+Configuration file to load; defaults to F</etc/puppet/hiera.yaml>.
+
+=item --debug
+
+Set the I<-d> flag.
+
+=item --class I<CLASS>
+
+Set the puppetclass for the query (role::base:hier_top==I<CLASS>).
+
+=item --environment I<ENVIRONMENT>
+
+Set the puppet environment for the query (environment=I<ENVIRONMENT>).
+
+=item --hash
+
+Output as a hash (equivalent to I<-h>).  Please do not use this *and*
+I<--array>.
+
+=item --host I<HOST>
+
+Set the host for the query (clientcer=I<HOST>).
+
+=item --role I<ROLE>
+
+Set the puppet role for the query (role::base::hier_role=I<ROLE>).
+
+=back
+
+=head1 AUTHOR
+
+Tim Skirvin <tskirvin@fnal.gov>
+
+=head1 COPYRIGHT
+
+Copyright 2014, Fermi National Accelerator Laboratory
+
+This program is free software; you may redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut
+
+"""
